@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 import { Search, Info, Settings, MoreVertical, LayoutTemplate, Plus, X, MessageSquare, Users } from 'lucide-react';
 import './index.css';
 
-const SOCKET_SERVER_URL = "http://localhost:5002";
+const SOCKET_SERVER_URL = import.meta.env.PROD ? "" : "http://localhost:5002";
 
 function App() {
   const [messages, setMessages] = useState([]);

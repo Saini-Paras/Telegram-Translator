@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./database/db');
@@ -193,6 +194,14 @@ app.delete('/api/selected-chats/:id', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Failed to remove chat' });
     }
+});
+
+// Serve frontend in production
+const frontendPath = path.join(__dirname, '../frontend/dist');
+app.use(express.static(frontendPath));
+
+app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
