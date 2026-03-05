@@ -6,6 +6,7 @@ const { translateText } = require('../translation/deepl');
 const Message = require('../database/models/Message');
 const SelectedChat = require('../database/models/SelectedChat');
 const { broadcastMessage } = require('../websocket/socket');
+const { forwardToTopic, isBotConfigured } = require('./botForwarder');
 
 dotenv.config();
 
@@ -73,6 +74,28 @@ const processMessage = async (client, msg, targetLanguage = 'en-US', shouldBroad
 
     if (shouldBroadcast && cachedMessage) {
         broadcastMessage(cachedMessage);
+    }
+
+    // Forward to forum topic if bot is configured
+    if (cachedMessage && isBotConfigured()) {
+        try {
+            const possibleIds = [
+                chatId.toString(),
+                `-100${chatId.toString()}`
+            ];
+            const selectedChat = await SelectedChat.findOne({ telegram_chat_id: { $in: possibleIds } });
+            if (selectedChat && selectedChat.topic_thread_id) {
+                await forwardToTopic(
+                    selectedChat.topic_thread_id,
+                    cachedMessage.translated_text,
+                    cachedMessage.username,
+                    cachedMessage.original_text,
+                    cachedMessage.detected_language
+                );
+            }
+        } catch (fwdErr) {
+            console.error('Bot forward error:', fwdErr.message);
+        }
     }
 
     return cachedMessage;

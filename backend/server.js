@@ -8,6 +8,7 @@ const { initSocket } = require('./websocket/socket');
 const { initTelegramListener, getTelegramClient, processMessage } = require('./telegram/listener');
 const Message = require('./database/models/Message');
 const SelectedChat = require('./database/models/SelectedChat');
+const { createTopicForChat, deleteTopicForChat, isBotConfigured } = require('./telegram/botForwarder');
 
 // Load env vars
 dotenv.config();
@@ -119,6 +120,17 @@ app.post('/api/selected-chats', async (req, res) => {
             title: title || 'Unknown',
             type: type || 'unknown'
         });
+
+        // Create forum topic if bot is configured
+        if (isBotConfigured()) {
+            try {
+                const threadId = await createTopicForChat(title || 'Unknown');
+                newChat.topic_thread_id = threadId;
+            } catch (topicErr) {
+                console.error('Failed to create forum topic:', topicErr.message);
+            }
+        }
+
         await newChat.save();
 
         res.status(201).json(newChat);
@@ -182,10 +194,16 @@ app.post('/api/selected-chats', async (req, res) => {
 app.delete('/api/selected-chats/:id', async (req, res) => {
     try {
         const chatId = req.params.id;
+        const chat = await SelectedChat.findOne({ telegram_chat_id: chatId });
+
+        // Delete forum topic if it exists
+        if (chat && chat.topic_thread_id && isBotConfigured()) {
+            await deleteTopicForChat(chat.topic_thread_id);
+        }
+
         await SelectedChat.findOneAndDelete({ telegram_chat_id: chatId });
 
-        // Also delete cached messages for this chat to free space (optional, but good)
-        // Adjust for the -100 prefix issue
+        // Also delete cached messages for this chat to free space
         await Message.deleteMany({
             telegram_chat_id: { $in: [chatId, `-100${chatId}`, chatId.replace('-100', '')] }
         });
@@ -194,6 +212,11 @@ app.delete('/api/selected-chats/:id', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Failed to remove chat' });
     }
+});
+
+// Check if bot forwarding is configured
+app.get('/api/bot-status', (req, res) => {
+    res.json({ configured: isBotConfigured() });
 });
 
 // Serve frontend in production
